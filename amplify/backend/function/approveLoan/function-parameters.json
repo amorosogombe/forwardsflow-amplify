@@ -1,0 +1,11 @@
+{
+  "lambdaLayers": [],
+  "environmentVariableList": [
+    {
+      "cloudFormationParameterName": "env"
+    },
+    {
+      "cloudFormationParameterName": "region"
+    }
+  ]
+}

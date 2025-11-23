@@ -1,0 +1,11 @@
+{
+  "AppSyncApiName": "forwardsflow",
+  "DynamoDBBillingMode": "PAY_PER_REQUEST",
+  "DynamoDBEnableServerSideEncryption": true,
+  "AuthCognitoUserPoolId": {
+    "Fn::GetAtt": [
+      "authforwardsflowauth",
+      "Outputs.UserPoolId"
+    ]
+  }
+}

@@ -1,0 +1,469 @@
+# GraphQL Schema for ForwardsFlow Platform
+
+type Bank @model @auth(rules: [
+  { allow: groups, groups: ["Admins"], operations: [create, update, delete, read] }
+  { allow: groups, groups: ["Banks"], operations: [read, update] }
+  { allow: private, operations: [read] }
+]) {
+  id: ID!
+  name: String!
+  country: String!
+  status: BankStatus!
+  licenses: [License] @hasMany
+  contactInfo: ContactInfo
+  users: [BankUser] @hasMany
+  depositInstruments: [DepositInstrument] @hasMany(indexName: "byBank")
+  mobileLoans: [MobileLoan] @hasMany(indexName: "byBank")
+  totalDeposits: Float
+  totalLoans: Float
+  netInterestMargin: Float
+  defaultRate: Float
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Investor @model @auth(rules: [
+  { allow: groups, groups: ["Admins"], operations: [create, update, delete, read] }
+  { allow: groups, groups: ["Investors"], operations: [read, update] }
+  { allow: owner, operations: [read, update] }
+]) {
+  id: ID!
+  name: String!
+  type: InvestorType!
+  country: String!
+  email: AWSEmail!
+  phone: AWSPhone
+  totalInvested: Float!
+  currentValue: Float!
+  avgYield: Float
+  portfolio: [Investment] @hasMany
+  preferences: InvestorPreferences
+  kycStatus: KYCStatus!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  owner: String @auth(rules: [{ allow: owner }])
+}
+
+type Borrower @model @auth(rules: [
+  { allow: groups, groups: ["Admins", "Banks"], operations: [read, update] }
+  { allow: owner, operations: [read, update] }
+]) {
+  id: ID!
+  phoneNumber: AWSPhone! @index(name: "byPhoneNumber")
+  name: String
+  email: AWSEmail
+  creditScore: Int
+  totalBorrowed: Float
+  totalRepaid: Float
+  activeLoans: Int
+  defaultedLoans: Int
+  status: BorrowerStatus!
+  loans: [MobileLoan] @hasMany(indexName: "byBorrower")
+  kycVerified: Boolean!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  owner: String @auth(rules: [{ allow: owner }])
+}
+
+type DepositInstrument @model @auth(rules: [
+  { allow: groups, groups: ["Admins", "Banks"], operations: [create, update, delete, read] }
+  { allow: groups, groups: ["Investors"], operations: [read] }
+  { allow: private, operations: [read] }
+]) {
+  id: ID!
+  bankId: ID! @index(name: "byBank", sortKeyFields: ["maturityDate"])
+  bank: Bank @belongsTo
+  instrumentType: InstrumentType!
+  currencyPair: String!
+  principal: Float!
+  interestRate: Float!
+  fxRate: Float
+  forwardsPremium: Float
+  maturityDate: AWSDate!
+  subscriptionDeadline: AWSDate!
+  totalIssueSize: Float!
+  currentSubscription: Float!
+  subscriptionPercentage: Float
+  status: InstrumentStatus! @index(name: "byStatus", sortKeyFields: ["createdAt"])
+  investors: [Investment] @hasMany
+  deploymentStatus: DeploymentStatus
+  projectedYield: Float
+  actualYield: Float
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type MobileLoan @model @auth(rules: [
+  { allow: groups, groups: ["Admins", "Banks"], operations: [create, update, delete, read] }
+  { allow: owner, operations: [read] }
+]) {
+  id: ID!
+  borrowerId: ID! @index(name: "byBorrower", sortKeyFields: ["status"])
+  borrower: Borrower @belongsTo
+  bankId: ID! @index(name: "byBank", sortKeyFields: ["status"])
+  bank: Bank @belongsTo
+  amount: Float!
+  interestRate: Float!
+  apr: Float!
+  duration: Int!
+  repaymentSchedule: RepaymentSchedule!
+  totalRepayable: Float!
+  outstanding: Float!
+  nextPaymentDate: AWSDate
+  status: LoanStatus! @index(name: "byStatus", sortKeyFields: ["createdAt"])
+  disbursementDate: AWSDateTime
+  daysOverdue: Int
+  paymentHistory: [Payment] @hasMany
+  applicationDate: AWSDateTime!
+  approvalDate: AWSDateTime
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  owner: String @auth(rules: [{ allow: owner }])
+}
+
+type Investment @model @auth(rules: [
+  { allow: groups, groups: ["Admins", "Banks"], operations: [read] }
+  { allow: owner, operations: [read] }
+]) {
+  id: ID!
+  investorId: ID!
+  investor: Investor @belongsTo
+  instrumentId: ID!
+  instrument: DepositInstrument @belongsTo
+  amount: Float!
+  subscriptionDate: AWSDateTime!
+  status: InvestmentStatus!
+  expectedReturn: Float
+  actualReturn: Float
+  maturityDate: AWSDate!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  owner: String @auth(rules: [{ allow: owner }])
+}
+
+type Transaction @model @auth(rules: [
+  { allow: groups, groups: ["Admins", "Banks"], operations: [create, read] }
+  { allow: private, operations: [read] }
+]) {
+  id: ID!
+  type: TransactionType! @index(name: "byType", sortKeyFields: ["timestamp"])
+  amount: Float!
+  currency: String!
+  fromEntity: String
+  toEntity: String
+  status: TransactionStatus!
+  paymentMethod: PaymentMethod
+  referenceId: String @index(name: "byReference")
+  metadata: AWSJSON
+  timestamp: AWSDateTime! @index(name: "byTimestamp")
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Payment @model @auth(rules: [
+  { allow: groups, groups: ["Admins", "Banks"], operations: [create, read] }
+  { allow: owner, operations: [read] }
+]) {
+  id: ID!
+  loanId: ID!
+  loan: MobileLoan @belongsTo
+  amount: Float!
+  paymentDate: AWSDateTime!
+  status: PaymentStatus!
+  method: PaymentMethod!
+  mpesaReference: String
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type License {
+  type: String!
+  number: String!
+  issuedDate: AWSDate!
+  expiryDate: AWSDate!
+  status: String!
+}
+
+type ContactInfo {
+  email: AWSEmail!
+  phone: AWSPhone!
+  address: String
+  swiftCode: String
+  accountNumbers: [BankAccount]
+}
+
+type BankAccount {
+  currency: String!
+  accountNumber: String!
+  bankName: String!
+  swiftCode: String
+  iban: String
+}
+
+type BankUser {
+  userId: ID!
+  name: String!
+  email: AWSEmail!
+  role: BankRole!
+  permissions: [Permission]!
+  active: Boolean!
+}
+
+type InvestorPreferences {
+  preferredCurrencies: [String]
+  minInterestRate: Float
+  maxMaturity: Int
+  autoInvest: Boolean
+}
+
+# Enums
+enum BankStatus {
+  ACTIVE
+  ONBOARDING
+  SUSPENDED
+  INACTIVE
+}
+
+enum InvestorType {
+  INSTITUTIONAL
+  INDIVIDUAL
+  FAMILY_OFFICE
+  FUND
+}
+
+enum BorrowerStatus {
+  ACTIVE
+  SUSPENDED
+  DEFAULTED
+  BLACKLISTED
+}
+
+enum InstrumentType {
+  FIXED_DEPOSIT
+  TIME_DEPOSIT
+  CERTIFICATE_OF_DEPOSIT
+}
+
+enum InstrumentStatus {
+  OPEN
+  PARTIALLY_SUBSCRIBED
+  FULLY_SUBSCRIBED
+  MATURED
+  SETTLED
+  CANCELLED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  DISBURSED
+  CURRENT
+  OVERDUE
+  DEFAULTED
+  PAID_OFF
+}
+
+enum InvestmentStatus {
+  ACTIVE
+  MATURED
+  SETTLED
+}
+
+enum TransactionType {
+  DEPOSIT
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT
+  SETTLEMENT
+  FEE
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum PaymentMethod {
+  MPESA
+  BANK_TRANSFER
+  SWIFT
+  STRIPE
+  PAYPAL
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum BankRole {
+  TREASURY_MANAGER
+  LENDING_MANAGER
+  CREDIT_ANALYST
+  COLLECTIONS_OFFICER
+  COMPLIANCE_OFFICER
+  OPERATIONS
+  ADMINISTRATOR
+  ANALYST
+}
+
+enum Permission {
+  VIEW_INSTRUMENTS
+  CREATE_INSTRUMENTS
+  APPROVE_LOANS
+  APPROVE_TRANSACTIONS
+  SETTLEMENT_MANAGEMENT
+  LENDING_OPERATIONS
+  FULL_ADMIN
+}
+
+enum KYCStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum RepaymentSchedule {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum DeploymentStatus {
+  NOT_DEPLOYED
+  PARTIALLY_DEPLOYED
+  FULLY_DEPLOYED
+}
+
+# Queries
+type Query {
+  getDashboardMetrics(userType: String!): DashboardMetrics
+    @function(name: "getDashboardMetrics-${env}")
+  
+  getLoanOffers(borrowerId: ID!, amount: Float!, duration: Int!): [LoanOffer]
+    @function(name: "getLoanOffers-${env}")
+  
+  calculateFXRate(fromCurrency: String!, toCurrency: String!): FXRate
+    @function(name: "calculateFXRate-${env}")
+  
+  getComplianceReport(bankId: ID!, startDate: AWSDate!, endDate: AWSDate!): ComplianceReport
+    @function(name: "getComplianceReport-${env}")
+}
+
+# Mutations
+type Mutation {
+  processPayment(input: ProcessPaymentInput!): PaymentResult
+    @function(name: "processPayment-${env}")
+  
+  approveLoan(loanId: ID!, approved: Boolean!, notes: String): LoanApprovalResult
+    @function(name: "approveLoan-${env}")
+  
+  disburseLoan(loanId: ID!): DisbursementResult
+    @function(name: "disburseLoan-${env}")
+  
+  subscribeToInstrument(input: SubscribeInput!): SubscriptionResult
+    @function(name: "subscribeToInstrument-${env}")
+  
+  sendWhatsAppMessage(phoneNumber: AWSPhone!, message: String!): MessageResult
+    @function(name: "sendWhatsAppMessage-${env}")
+}
+
+# Subscriptions
+type Subscription {
+  onNewLoanApplication(bankId: ID!): MobileLoan
+    @aws_subscribe(mutations: ["createMobileLoan"])
+  
+  onInstrumentUpdate(investorId: ID!): DepositInstrument
+    @aws_subscribe(mutations: ["updateDepositInstrument"])
+  
+  onPaymentReceived(loanId: ID!): Payment
+    @aws_subscribe(mutations: ["createPayment"])
+}
+
+# Custom Types
+type DashboardMetrics {
+  totalValue: Float!
+  activeCount: Int!
+  growthRate: Float!
+  metrics: AWSJSON!
+}
+
+type LoanOffer {
+  bankId: ID!
+  bankName: String!
+  amount: Float!
+  interestRate: Float!
+  apr: Float!
+  totalRepayable: Float!
+  duration: Int!
+  processingTime: String!
+}
+
+type FXRate {
+  fromCurrency: String!
+  toCurrency: String!
+  rate: Float!
+  timestamp: AWSDateTime!
+  source: String!
+}
+
+type ComplianceReport {
+  bankId: ID!
+  period: String!
+  kycVerificationRate: Float!
+  amlAlerts: Int!
+  regulatoryIssues: Int!
+  details: AWSJSON!
+}
+
+type PaymentResult {
+  success: Boolean!
+  transactionId: ID
+  message: String
+  mpesaReference: String
+}
+
+type LoanApprovalResult {
+  success: Boolean!
+  loanId: ID!
+  message: String
+}
+
+type DisbursementResult {
+  success: Boolean!
+  loanId: ID!
+  amount: Float!
+  mpesaReference: String
+  message: String
+}
+
+type SubscriptionResult {
+  success: Boolean!
+  investmentId: ID
+  message: String
+}
+
+type MessageResult {
+  success: Boolean!
+  messageId: String
+  message: String
+}
+
+# Inputs
+input ProcessPaymentInput {
+  loanId: ID!
+  amount: Float!
+  method: PaymentMethod!
+  mpesaPhone: AWSPhone
+}
+
+input SubscribeInput {
+  instrumentId: ID!
+  amount: Float!
+  investorId: ID!
+}
