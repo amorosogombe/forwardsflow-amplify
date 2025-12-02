@@ -1,42 +1,38 @@
 {
   "name": "forwardsflow-amplify",
-  "version": "1.0.0",
-  "description": "ForwardsFlow Platform - AWS Amplify Deployment",
+  "version": "2.0.0",
   "private": true,
+  "description": "ForwardsFlow - Multi-tenant Impact Investment Platform",
+  "dependencies": {
+    "@aws-amplify/ui-react": "^6.1.0",
+    "aws-amplify": "^6.0.0",
+    "lucide-react": "^0.263.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "react-scripts": "^0.0.0",
+    "recharts": "^2.10.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "amplify:push": "amplify push",
-    "amplify:publish": "amplify publish",
-    "deploy:dev": "amplify env checkout dev && amplify publish",
-    "deploy:staging": "amplify env checkout staging && amplify publish",
-    "deploy:prod": "amplify env checkout prod && amplify publish"
-  },
-  "dependencies": {
-    "@aws-amplify/ui-react": "^6.0.0",
-    "aws-amplify": "^6.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0",
-    "recharts": "^2.10.0",
-    "date-fns": "^2.30.0",
-    "axios": "^1.6.0",
-    "react-query": "^3.39.0"
-  },
-  "devDependencies": {
-    "@aws-amplify/cli": "^12.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "react-scripts": "^5.0.1",
-    "tailwindcss": "^3.3.0",
-    "autoprefixer": "^10.4.0",
-    "postcss": "^8.4.0"
+    "amplify-modelgen": "amplify codegen models",
+    "amplify-push": "amplify push"
   },
   "eslintConfig": {
     "extends": [
-      "react-app"
+      "react-app",
+      "react-app/jest"
     ]
   },
   "browserslist": {
@@ -50,5 +46,6 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  }
+  },
+  "homepage": "."
 }

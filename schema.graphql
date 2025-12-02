@@ -1,0 +1,329 @@
+# ForwardsFlow GraphQL Schema
+# This schema defines the data models for the ForwardsFlow platform
+
+# Enums
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  TENANT_USER
+}
+
+enum TenantType {
+  INVESTOR
+  BANK
+}
+
+enum TenantStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  INACTIVE
+}
+
+enum InstrumentStatus {
+  DRAFT
+  OPEN
+  PARTIALLY_SUBSCRIBED
+  FULLY_SUBSCRIBED
+  MATURED
+  SETTLED
+  CANCELLED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISBURSED
+  CURRENT
+  OVERDUE
+  DEFAULTED
+  PAID_OFF
+}
+
+# User Model
+type User @model @auth(rules: [
+  { allow: owner },
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] },
+  { allow: groups, groups: ["TenantAdmins"], operations: [read, update] }
+]) {
+  id: ID!
+  email: String! @index(name: "byEmail")
+  name: String!
+  role: UserRole!
+  tenantId: ID @index(name: "byTenant")
+  tenant: Tenant @belongsTo(fields: ["tenantId"])
+  jobRole: String
+  phone: String
+  avatar: String
+  status: TenantStatus
+  lastLogin: AWSDateTime
+  mfaEnabled: Boolean
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Tenant (Organization) Model
+type Tenant @model @auth(rules: [
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] },
+  { allow: owner, ownerField: "adminUsers", operations: [read, update] }
+]) {
+  id: ID!
+  name: String!
+  type: TenantType!
+  subType: String # e.g., "impact_fund", "commercial_bank"
+  email: String!
+  phone: String
+  country: String!
+  status: TenantStatus!
+  logo: String
+  settings: AWSJSON
+  
+  # Investor-specific fields
+  investorPreferences: AWSJSON
+  totalInvested: Float
+  activeInstruments: Int
+  avgYield: Float
+  
+  # Bank-specific fields
+  bankLicense: String
+  mobileLendingLicense: String
+  mpesaIntegrated: Boolean
+  totalCapital: Float
+  activeLoans: Int
+  loanVolume: Float
+  monthlyYield: Float
+  
+  # Relationships
+  users: [User] @hasMany(indexName: "byTenant", fields: ["id"])
+  instruments: [Instrument] @hasMany(indexName: "byBank", fields: ["id"])
+  investments: [Investment] @hasMany(indexName: "byInvestor", fields: ["id"])
+  
+  # Audit
+  adminUsers: [String]
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Deposit Instrument Model
+type Instrument @model @auth(rules: [
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] },
+  { allow: groups, groups: ["BankAdmins"], operations: [create, read, update] },
+  { allow: groups, groups: ["Investors"], operations: [read] }
+]) {
+  id: ID!
+  bankId: ID! @index(name: "byBank")
+  bank: Tenant @belongsTo(fields: ["bankId"])
+  
+  type: String! # Fixed Deposit, Time Deposit, Certificate of Deposit
+  currencyPair: String! # e.g., "KES:JPY"
+  baseCurrency: String!
+  quoteCurrency: String!
+  
+  principal: Float!
+  minTicket: Float
+  maxTicket: Float
+  interestRate: Float!
+  forwardsRate: Float!
+  projectedYield: Float!
+  
+  maturityDate: AWSDate!
+  subscriptionDeadline: AWSDate
+  earlyRedemptionTerms: String
+  
+  status: InstrumentStatus!
+  subscribed: Float
+  subscribedPct: Float
+  subscriberCount: Int
+  
+  intendedUse: String
+  collateralDetails: String
+  
+  # Relationships
+  investments: [Investment] @hasMany(indexName: "byInstrument", fields: ["id"])
+  
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Investment Model (Investor's position in an instrument)
+type Investment @model @auth(rules: [
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] },
+  { allow: groups, groups: ["BankAdmins"], operations: [read, update] },
+  { allow: owner }
+]) {
+  id: ID!
+  investorId: ID! @index(name: "byInvestor")
+  investor: Tenant @belongsTo(fields: ["investorId"])
+  instrumentId: ID! @index(name: "byInstrument")
+  instrument: Instrument @belongsTo(fields: ["instrumentId"])
+  
+  amount: Float!
+  currency: String!
+  rate: Float!
+  expectedReturn: Float
+  
+  status: String! # pending, active, matured, settled
+  
+  investedAt: AWSDateTime
+  maturityDate: AWSDate
+  settledAt: AWSDateTime
+  
+  owner: String
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Mobile Loan Model
+type Loan @model @auth(rules: [
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] },
+  { allow: groups, groups: ["BankAdmins", "BankUsers"], operations: [create, read, update] }
+]) {
+  id: ID!
+  bankId: ID! @index(name: "byLoanBank")
+  bank: Tenant @belongsTo(fields: ["bankId"])
+  
+  borrowerPhone: String! @index(name: "byBorrower")
+  borrowerName: String
+  borrowerIdNumber: String
+  
+  amount: Float!
+  currency: String!
+  interestRate: Float!
+  term: Int! # days
+  repaymentSchedule: String # daily, weekly, monthly
+  
+  status: LoanStatus!
+  creditScore: Int
+  riskRating: String
+  
+  amountDisbursed: Float
+  amountRepaid: Float
+  amountOutstanding: Float
+  daysOverdue: Int
+  
+  disbursedAt: AWSDateTime
+  dueDate: AWSDate
+  paidOffAt: AWSDateTime
+  
+  # WhatsApp conversation reference
+  whatsappThreadId: String
+  
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Transaction Model
+type Transaction @model @auth(rules: [
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] },
+  { allow: groups, groups: ["TenantAdmins"], operations: [read] }
+]) {
+  id: ID!
+  type: String! # deposit, withdrawal, disbursement, repayment, fee, fx_conversion
+  
+  fromTenantId: ID
+  toTenantId: ID
+  instrumentId: ID
+  loanId: ID
+  
+  amount: Float!
+  currency: String!
+  fxRate: Float
+  fxAmount: Float
+  fxCurrency: String
+  
+  status: String! # pending, completed, failed, reversed
+  reference: String
+  description: String
+  
+  processedAt: AWSDateTime
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Notification Model
+type Notification @model @auth(rules: [
+  { allow: owner },
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] }
+]) {
+  id: ID!
+  userId: ID! @index(name: "byUser")
+  
+  type: String!
+  title: String!
+  message: String!
+  data: AWSJSON
+  
+  read: Boolean
+  readAt: AWSDateTime
+  
+  owner: String
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Platform Analytics (aggregated data)
+type PlatformAnalytics @model @auth(rules: [
+  { allow: groups, groups: ["SuperAdmins"], operations: [create, read, update, delete] }
+]) {
+  id: ID!
+  date: AWSDate! @index(name: "byDate")
+  
+  totalCapitalDeployed: Float
+  totalInvestors: Int
+  totalBanks: Int
+  totalActiveLoans: Int
+  totalLoanVolume: Float
+  avgPlatformYield: Float
+  monthlyRevenue: Float
+  monthlyGrowth: Float
+  
+  # Detailed breakdowns
+  capitalByMonth: AWSJSON
+  loansByMonth: AWSJSON
+  revenueByMonth: AWSJSON
+  
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+# Queries
+type Query {
+  # Custom queries can be added here
+  getInstrumentsByStatus(status: InstrumentStatus!, limit: Int, nextToken: String): InstrumentConnection
+  getLoansByStatus(bankId: ID!, status: LoanStatus!, limit: Int, nextToken: String): LoanConnection
+  getTenantAnalytics(tenantId: ID!, startDate: AWSDate!, endDate: AWSDate!): AWSJSON
+}
+
+# Mutations
+type Mutation {
+  # Custom mutations for business logic
+  createInvestment(input: CreateInvestmentInput!): Investment
+  approveLoans(loanIds: [ID!]!, bankId: ID!): [Loan]
+  processLoanRepayment(loanId: ID!, amount: Float!, reference: String!): Loan
+}
+
+# Subscriptions for real-time updates
+type Subscription {
+  onNewLoanApplication(bankId: ID!): Loan @aws_subscribe(mutations: ["createLoan"])
+  onInstrumentUpdate(instrumentId: ID!): Instrument @aws_subscribe(mutations: ["updateInstrument"])
+  onNewNotification(userId: ID!): Notification @aws_subscribe(mutations: ["createNotification"])
+}
+
+# Input types
+input CreateInvestmentInput {
+  investorId: ID!
+  instrumentId: ID!
+  amount: Float!
+}
+
+# Connection types for pagination
+type InstrumentConnection {
+  items: [Instrument]
+  nextToken: String
+}
+
+type LoanConnection {
+  items: [Loan]
+  nextToken: String
+}
